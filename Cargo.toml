@@ -1,5 +1,5 @@
 [package]
-name = "rs-lib-commander"
+name = "rs_lib_commander"
 version = "0.1.0"
 edition = "2021"
 
