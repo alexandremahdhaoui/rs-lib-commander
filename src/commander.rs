@@ -1,27 +1,52 @@
-pub trait Command<S>: Sized {
-    fn execute(strategy: &S, manifest: &str) -> Result<Self, String>;
+pub trait Command<B, S>: Sized {
+    fn execute(bridge: &B, strategy: &S, manifest: &str) -> Result<Self, String>;
 }
 
 // Add support for UNDO() operation.
-pub trait Commander<S> {
-    fn execute<T: Command<S>>(&self, manifest: &str) -> Result<T, String> {
-        T::execute(self.strategy(), manifest)
+pub trait Commander<B, S> {
+    fn execute<T: Command<B, S>>(&self, manifest: &str) -> Result<T, String> {
+        T::execute(self.get_bridge(),self.get_strategy(), manifest)
     }
-    fn new(strategy: S) -> Self;
-    fn strategy(&self) -> &S;
+    fn new(bridge: B, strategy: S) -> Self;
+    fn get_bridge(&self) -> &B;
+    fn get_strategy(&self) -> &S;
 }
 
-pub struct Client<S> {
+pub struct Client<B, S> {
+    bridge: B,
     strategy: S
 }
 
-impl<S> Commander<S> for Client<S> {
-    fn new(strategy: S) -> Self {
-        Self{ strategy }
+impl<B, S> Commander<B, S> for Client<B, S> {
+    fn new(bridge: B, strategy: S) -> Self {
+        Self{ bridge, strategy }
     }
 
-    fn strategy(&self) -> &S {
+    fn get_bridge(&self) -> &B {
+        return &self.bridge
+    }
+    fn get_strategy(&self) -> &S {
         return &self.strategy
+    }
+}
+
+pub struct ClientBuilder<B, S> {
+    client: Client<Option<B>, Option<S>>
+}
+impl<B, S> ClientBuilder<B, S> {
+    fn new() -> Self {
+        Self{ client: Client { bridge: None, strategy: None }}
+    }
+    fn set_bridge(&mut self, bridge: B) -> &mut ClientBuilder<B, S> {
+        self.client.bridge = Some(bridge);
+        self
+    }
+    fn set_strategy(&mut self, strategy: S) -> &mut ClientBuilder<B, S> {
+        self.client.strategy = Some(strategy);
+        self
+    }
+    fn build(&mut self) -> Client<B, S> {
+        Client::new(self.client.bridge.take().unwrap(), self.client.strategy.take().unwrap())
     }
 }
 
@@ -29,16 +54,18 @@ impl<S> Commander<S> for Client<S> {
 mod tests {
     use super::*;
 
-    struct ExampleStrategy {
+    struct ExampleStrategy;
+
+    struct ExampleBridge {
         pattern: String
     }
 
     #[derive(Debug, PartialEq)]
     struct ExampleCommand {}
 
-    impl Command<ExampleStrategy> for ExampleCommand {
-        fn execute(strategy: &ExampleStrategy, manifest: &str) -> Result<Self, String> {
-            if manifest == strategy.pattern {
+    impl Command<ExampleBridge, ExampleStrategy> for ExampleCommand {
+        fn execute(bridge: &ExampleBridge, _strategy: &ExampleStrategy, manifest: &str) -> Result<Self, String> {
+            if manifest == bridge.pattern {
                 Ok(Self {})
             } else {
                 error()
@@ -54,8 +81,8 @@ mod tests {
         Err("failed".to_string())
     }
 
-    fn client() -> Client<ExampleStrategy> {
-        Client::new(ExampleStrategy {pattern: String::from("works") })
+    fn client() -> Client<ExampleBridge, ExampleStrategy> {
+        Client::new(ExampleBridge {pattern: String::from("works")}, ExampleStrategy{})
     }
 
     #[test]
